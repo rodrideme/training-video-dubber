@@ -12,6 +12,7 @@ from src.elevenlabs_dub import (
     group_segments,
     build_dubbed_video,
 )
+from src.outro import append_outro
 from src.translate_title import translate_title
 from src.vimeo_upload import upload_to_vimeo
 
@@ -28,6 +29,7 @@ def run_pipeline(loom_url: str, log=print) -> dict:
     anthropic_key = os.environ["ANTHROPIC_API_KEY"]
     download_dir = os.environ.get("DOWNLOAD_DIR", "downloads")
     vimeo_folder_id = os.environ.get("VIMEO_FOLDER_ID") or None
+    outro_path = os.environ.get("OUTRO_PATH", "assets/outro.mp4")
 
     log(f"[1/6] Downloading {loom_url} ...")
     video = download_loom(loom_url, output_dir=download_dir)
@@ -48,11 +50,19 @@ def run_pipeline(loom_url: str, log=print) -> dict:
     groups = group_segments(segments)
     log(f"      {len(groups)} speech groups found.")
 
-    output_path = str(Path("dubbed") / f"{video['stem']}.mp4")
-    log("[5/6] Generating Hugo voice and building video ...")
-    build_dubbed_video(video["path"], groups, api_key, output_path)
+    dubbed_path = str(Path("dubbed") / f"{video['stem']}_dubbed.mp4")
+    log("[5/7] Generating Hugo voice and building video ...")
+    build_dubbed_video(video["path"], groups, api_key, dubbed_path)
 
-    log("[6/6] Translating title and uploading to Vimeo ...")
+    output_path = str(Path("dubbed") / f"{video['stem']}.mp4")
+    if Path(outro_path).exists():
+        log(f"[6/7] Appending outro ...")
+        append_outro(dubbed_path, outro_path, output_path)
+    else:
+        log(f"[6/7] No outro found at {outro_path!r}, skipping.")
+        output_path = dubbed_path
+
+    log("[7/7] Translating title and uploading to Vimeo ...")
     english_title = translate_title(video["stem"], anthropic_key)
     log(f"      Title : {english_title}")
     _, vimeo_url = upload_to_vimeo(

@@ -4,7 +4,8 @@ dubbed/
 bin/
 __pycache__/
 *.py[cod]
-*.mp4
-*.mov
-*.avi
-*.mkv
+downloads/*.mp4
+downloads/*.mov
+downloads/*.avi
+downloads/*.mkv
+dubbed/*.mp4
