@@ -59,11 +59,10 @@ def _process(urls: list, channel: str, thread_ts: str) -> None:
         prefix = f"*[{i}/{count}]* " if count > 1 else ""
         try:
             result = run_pipeline(url)
-            _post(
-                channel,
-                thread_ts,
-                f"✅ {prefix}*{result['title']}*\n{result['vimeo_url']}",
-            )
+            lines = [f"✅ {prefix}*{result['title']}*", f"Vimeo: {result['vimeo_url']}"]
+            if result.get("lesson_url"):
+                lines.append(f"Circle: {result['lesson_url']}")
+            _post(channel, thread_ts, "\n".join(lines))
         except Exception as exc:
             _post(channel, thread_ts, f"❌ {prefix}Pipeline failed for `{url}`:\n`{exc}`")
 
