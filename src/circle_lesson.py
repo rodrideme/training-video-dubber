@@ -1,4 +1,3 @@
-import re
 import requests
 
 CIRCLE_BASE = "https://app.circle.so/api/admin/v2"
@@ -13,26 +12,21 @@ def _headers(token: str) -> dict:
     }
 
 
-def _vimeo_embed_html(vimeo_url: str) -> str:
-    """Build a Vimeo iframe from a URL like https://vimeo.com/VIDEO_ID/HASH."""
-    match = re.search(r'vimeo\.com/(?:videos/)?(\d+)(?:/([a-f0-9]+))?', vimeo_url)
-    if not match:
-        raise ValueError(f"Cannot parse Vimeo URL: {vimeo_url}")
-    video_id = match.group(1)
-    h = match.group(2)
-    src = f"https://player.vimeo.com/video/{video_id}"
-    if h:
-        src += f"?h={h}&"
-    else:
-        src += "?"
-    src += "badge=0&autopause=0&player_id=0"
-    return (
-        f'<div style="padding:56.25% 0 0 0;position:relative;">'
-        f'<iframe src="{src}" frameborder="0" allow="autoplay; fullscreen; '
-        f'picture-in-picture" allowfullscreen '
-        f'style="position:absolute;top:0;left:0;width:100%;height:100%;"></iframe>'
-        f'</div>'
+def _create_embed_sgid(vimeo_url: str, token: str) -> str:
+    """
+    Circle's rich text editor embeds video via a signed sgid token, not a raw
+    iframe (raw <iframe> tags in body_html are stripped by Circle's sanitizer).
+    POST /embeds resolves the URL via Circle's oEmbed provider and returns a
+    signed token referencing that embed, which can be placed in an `embed`
+    node inside rich_text_body.
+    """
+    r = requests.post(
+        f"{CIRCLE_BASE}/embeds",
+        headers=_headers(token),
+        json={"url": vimeo_url},
     )
+    r.raise_for_status()
+    return r.json()["sgid"]
 
 
 def create_lesson(title: str, vimeo_url: str, token: str) -> dict:
@@ -40,7 +34,7 @@ def create_lesson(title: str, vimeo_url: str, token: str) -> dict:
     Create a published lesson in The Essentials course with the Vimeo video embedded.
     Returns the created lesson data.
     """
-    body_html = _vimeo_embed_html(vimeo_url)
+    sgid = _create_embed_sgid(vimeo_url, token)
     r = requests.post(
         f"{CIRCLE_BASE}/course_lessons",
         headers=_headers(token),
@@ -48,7 +42,14 @@ def create_lesson(title: str, vimeo_url: str, token: str) -> dict:
             "space_id": SPACE_ID,
             "section_id": SECTION_ID,
             "name": title,
-            "body_html": body_html,
+            "rich_text_body": {
+                "body": {
+                    "type": "doc",
+                    "content": [
+                        {"type": "embed", "attrs": {"sgid": sgid}},
+                    ],
+                },
+            },
             "status": "published",
             "is_comments_enabled": False,
         },
