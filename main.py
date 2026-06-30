@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """
 Download a Loom video (Brazilian Portuguese) and dub it to English US
-using ElevenLabs for translation + Hugo voice via TTS + ffmpeg for timing.
+using ElevenLabs for translation + Hugo voice via TTS + ffmpeg for timing,
+then upload the result to Vimeo.
 
 Usage:
     python main.py <loom_url>
 
 Environment variables (or .env file):
     ELEVENLABS_API_KEY  — ElevenLabs API key
+    VIMEO_ACCESS_TOKEN  — Vimeo API token (upload + edit scopes)
+    VIMEO_FOLDER_ID     — Vimeo folder/showcase ID (optional)
     DOWNLOAD_DIR        — Where to save source videos (default: downloads)
 """
 
@@ -27,6 +30,7 @@ from src.elevenlabs_dub import (
     group_segments,
     build_dubbed_video,
 )
+from src.vimeo_upload import upload_to_vimeo
 
 
 def main():
@@ -34,9 +38,13 @@ def main():
 
     api_key = os.environ.get("ELEVENLABS_API_KEY")
     download_dir = os.environ.get("DOWNLOAD_DIR", "downloads")
+    vimeo_token = os.environ.get("VIMEO_ACCESS_TOKEN")
+    vimeo_folder_id = os.environ.get("VIMEO_FOLDER_ID") or None
 
     if not api_key:
         sys.exit("Error: ELEVENLABS_API_KEY is not set.")
+    if not vimeo_token:
+        sys.exit("Error: VIMEO_ACCESS_TOKEN is not set.")
 
     parser = argparse.ArgumentParser(description="Dub a Loom video (PT-BR → EN) with Hugo voice")
     parser.add_argument("loom_url", help="Loom share URL")
@@ -81,7 +89,21 @@ def main():
         output_path=output_path,
     )
 
-    print(f"\nDone! Dubbed video saved to: {output_path}")
+    print(f"      Saved to : {output_path}")
+
+    # 6 — Upload to Vimeo
+    print(f"\n[6/6] Uploading to Vimeo...")
+    _, video_url = upload_to_vimeo(
+        file_path=output_path,
+        name=video["stem"],
+        token=vimeo_token,
+        privacy="unlisted",
+        folder_id=vimeo_folder_id,
+    )
+
+    print(f"\nDone!")
+    print(f"  Dubbed video : {output_path}")
+    print(f"  Vimeo URL   : {video_url}")
 
 
 if __name__ == "__main__":
