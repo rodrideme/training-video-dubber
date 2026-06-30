@@ -20,8 +20,22 @@ def _create_video(name: str, file_size: int, token: str, privacy: str) -> tuple:
         headers={**_headers(token), "Content-Type": "application/json"},
         json={
             "name": name,
-            "privacy": {"view": privacy},
+            "privacy": {"view": privacy, "embed": "public"},
             "upload": {"approach": "tus", "size": file_size},
+            "embed": {
+                "title": {
+                    "name": "hide",
+                    "owner": "hide",
+                    "portrait": "hide",
+                },
+                "buttons": {
+                    "like": False,
+                    "watchlater": False,
+                    "share": False,
+                },
+                "logos": {"vimeo": False},
+                "end_screen": [{"type": "empty"}],
+            },
         },
     )
     r.raise_for_status()
@@ -85,5 +99,11 @@ def upload_to_vimeo(
         _add_to_folder(video_uri, folder_id, token)
         print(f"      Added to folder {folder_id}")
 
-    video_url = f"https://vimeo.com{video_uri}"
+    # Fetch the real shareable link (unlisted videos get a private hash appended)
+    r = requests.get(
+        f"{VIMEO_BASE}{video_uri}",
+        headers={**_headers(token), "fields": "link"},
+    )
+    r.raise_for_status()
+    video_url = r.json().get("link", f"https://vimeo.com{video_uri}")
     return video_uri, video_url

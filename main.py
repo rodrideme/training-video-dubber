@@ -31,6 +31,7 @@ from src.elevenlabs_dub import (
     build_dubbed_video,
 )
 from src.vimeo_upload import upload_to_vimeo
+from src.translate_title import translate_title
 
 
 def main():
@@ -40,11 +41,14 @@ def main():
     download_dir = os.environ.get("DOWNLOAD_DIR", "downloads")
     vimeo_token = os.environ.get("VIMEO_ACCESS_TOKEN")
     vimeo_folder_id = os.environ.get("VIMEO_FOLDER_ID") or None
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
 
     if not api_key:
         sys.exit("Error: ELEVENLABS_API_KEY is not set.")
     if not vimeo_token:
         sys.exit("Error: VIMEO_ACCESS_TOKEN is not set.")
+    if not anthropic_key:
+        sys.exit("Error: ANTHROPIC_API_KEY is not set.")
 
     parser = argparse.ArgumentParser(description="Dub a Loom video (PT-BR → EN) with Hugo voice")
     parser.add_argument("loom_url", help="Loom share URL")
@@ -91,11 +95,13 @@ def main():
 
     print(f"      Saved to : {output_path}")
 
-    # 6 — Upload to Vimeo
+    # 6 — Translate title + upload to Vimeo
     print(f"\n[6/6] Uploading to Vimeo...")
+    english_title = translate_title(video["stem"], anthropic_key)
+    print(f"      Title     : {english_title}")
     _, video_url = upload_to_vimeo(
         file_path=output_path,
-        name=video["stem"],
+        name=english_title,
         token=vimeo_token,
         privacy="unlisted",
         folder_id=vimeo_folder_id,
