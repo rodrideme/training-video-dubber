@@ -2,3 +2,5 @@ yt-dlp
 requests
 python-dotenv
 elevenlabs
+flask
+gunicorn
