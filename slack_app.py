@@ -60,6 +60,8 @@ def _process(urls: list, channel: str, thread_ts: str) -> None:
         try:
             result = run_pipeline(url)
             lines = [f"✅ {prefix}*{result['title']}*", f"Vimeo: {result['vimeo_url']}"]
+            if result.get("youtube_url"):
+                lines.append(f"YouTube: {result['youtube_url']}")
             if result.get("lesson_url"):
                 lines.append(f"Circle: {result['lesson_url']}")
             _post(channel, thread_ts, "\n".join(lines))
