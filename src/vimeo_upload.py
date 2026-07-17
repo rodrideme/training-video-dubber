@@ -1,6 +1,8 @@
-from typing import Optional
-import requests
+import time
 from pathlib import Path
+from typing import Optional
+
+import requests
 
 VIMEO_BASE = "https://api.vimeo.com"
 CHUNK_SIZE = 128 * 1024 * 1024  # 128 MB per chunk
@@ -66,6 +68,38 @@ def _tus_upload(upload_link: str, file_path: str) -> None:
             print(f"      {pct:.1f}% ({offset / 1024**2:.0f} / {file_size / 1024**2:.0f} MB)")
 
 
+def _wait_for_available(video_uri: str, token: str, poll_secs: int = 15, max_wait: int = 900) -> str:
+    """
+    Poll until Vimeo finishes transcoding and the video is 'available'.
+    Returns the shareable link once ready.
+    Vimeo typically takes 1-5 minutes for short training videos.
+    """
+    deadline = time.time() + max_wait
+    attempt = 0
+    while time.time() < deadline:
+        r = requests.get(
+            f"{VIMEO_BASE}{video_uri}",
+            headers=_headers(token),
+            params={"fields": "status,transcode,link"},
+        )
+        r.raise_for_status()
+        data = r.json()
+        status = data.get("status", "")
+        transcode_status = (data.get("transcode") or {}).get("status", "")
+        attempt += 1
+        print(f"      Vimeo status: {status} / transcode: {transcode_status} (attempt {attempt})")
+
+        if status == "available":
+            return data.get("link", f"https://vimeo.com{video_uri}")
+
+        if status in ("transcoding_error", "uploading_error"):
+            raise RuntimeError(f"Vimeo transcoding failed with status: {status}")
+
+        time.sleep(poll_secs)
+
+    raise TimeoutError(f"Vimeo video {video_uri} not available after {max_wait}s")
+
+
 def _add_to_folder(video_uri: str, folder_id: str, token: str) -> None:
     video_id = video_uri.split("/")[-1]
     r = requests.put(
@@ -99,11 +133,9 @@ def upload_to_vimeo(
         _add_to_folder(video_uri, folder_id, token)
         print(f"      Added to folder {folder_id}")
 
-    # Fetch the real shareable link (unlisted videos get a private hash appended)
-    r = requests.get(
-        f"{VIMEO_BASE}{video_uri}",
-        headers={**_headers(token), "fields": "link"},
-    )
-    r.raise_for_status()
-    video_url = r.json().get("link", f"https://vimeo.com{video_uri}")
+    # Wait for Vimeo to finish transcoding before returning the shareable link.
+    # Skipping this causes a 422 when Circle's /embeds endpoint tries to fetch
+    # Vimeo's oEmbed data for a video that isn't available yet.
+    print("      Waiting for Vimeo to finish transcoding ...")
+    video_url = _wait_for_available(video_uri, token)
     return video_uri, video_url
